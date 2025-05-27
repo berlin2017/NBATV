@@ -1,8 +1,9 @@
 package com.berlin.nbatv.data
 
 data class VideoItem(
-    val url: String?,
+    val videoUrl: String?,
     val id: Int,
     val imageUrl: String?,
+    val description: String?,
     val name: String?
 )
