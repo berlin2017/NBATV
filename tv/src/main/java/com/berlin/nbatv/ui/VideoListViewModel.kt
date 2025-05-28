@@ -1,11 +1,15 @@
 package com.berlin.nbatv.ui // 或者您放置ViewModel的包，例如 com.berlin.nbatv.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.berlin.nbatv.PornhubParserWithOkHttp
+import com.berlin.nbatv.PornhubParserWithOkHttp.fetchAndParseVideos
 import com.berlin.nbatv.data.VideoItem // 确保路径正确
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class VideoListViewModel : ViewModel() {
@@ -20,79 +24,100 @@ class VideoListViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isLoadingMore = MutableStateFlow(false) // 用于上拉加载的特定状态
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private var currentPage = 1
+    private var isLastPage = false // 标记是否已到达最后一页
+
+    // 目标 URL (不含 page 参数)
+    private val baseCategoryUrl = "https://www.xvideos.com/new/"
+
 
     init {
         // ViewModel 初始化时加载数据
         fetchVideoData()
     }
 
-    // 从您的数据源获取数据的方法
-    // 这里我们暂时使用之前 MainActivity 中的静态列表作为示例数据源
-    // 将来您可以替换为网络请求、数据库查询或网页解析逻辑
-    fun fetchVideoData() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _errorMessage.value = null
-            try {
-                // 模拟数据加载延迟 (如果需要)
-                // kotlinx.coroutines.delay(1000)
 
-                // !!! 关键：将您之前在 MainActivity 中的 list 移到这里
-                // 或者在这里实现从 https://jzb123.huajiaedu.com/ 解析的逻辑
-                val items = listOf(
-                    VideoItem(
-                        id = 0, // 建议使用更唯一的 ID，例如视频名称或URL哈希
-                        name = "TV1 from ViewModel",
-                        description = "Description for TV1", // 添加描述
-                        imageUrl = "https://images.unsplash.com/photo-1575936123452-b67c3203c357?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8aW1hZ2V8ZW58MHx8MHx8fDA%3D",
-                        videoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" // 替换为真实的视频流 URL
-                    ),
-                    VideoItem(
-                        id = 1,
-                        name = "TV2 from ViewModel",
-                        description = "Description for TV2",
-                        imageUrl = "https://cdn.pixabay.com/photo/2015/04/23/22/00/tree-736885_1280.jpg", // 换个图片
-                        videoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-                    ),
-                    VideoItem(
-                        id = 2,
-                        name = "TV3 from ViewModel",
-                        description = "Description for TV3",
-                        imageUrl = "https://images.pexels.com/photos/206359/pexels-photo-206359.jpeg?cs=srgb&dl=pexels-pixabay-206359.jpg&fm=jpg", // 换个图片
-                        videoUrl = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-                    ),
-                    VideoItem(
-                        id = 4,
-                        name = "TV3 from ViewModel",
-                        description = "Description for TV4",
-                        imageUrl = "https://images.pexels.com/photos/206359/pexels-photo-206359.jpeg?cs=srgb&dl=pexels-pixabay-206359.jpg&fm=jpg", // 换个图片
-                        videoUrl = "YOUR_M3U8_OR_VIDEO_STREAM_URL_3"
-                    ),
-                    VideoItem(
-                        id = 5,
-                        name = "TV3 from ViewModel",
-                        description = "Description for TV5",
-                        imageUrl = "https://images.pexels.com/photos/206359/pexels-photo-206359.jpeg?cs=srgb&dl=pexels-pixabay-206359.jpg&fm=jpg", // 换个图片
-                        videoUrl = "YOUR_M3U8_OR_VIDEO_STREAM_URL_3"
-                    ),
-                    // ... 更多 VideoItem
-                )
-                _videoList.value = items
+    fun fetchVideoData(isRefresh: Boolean = false) {
+        if (isLoading.value || isLoadingMore.value || (isLastPage && !isRefresh)) {
+            Log.d("ViewModel", "Fetch skipped: loading=${isLoading.value}, loadingMore=${isLoadingMore.value}, isLastPage=$isLastPage, isRefresh=$isRefresh")
+            return
+        }
+
+        viewModelScope.launch {
+            if (isRefresh) {
+                _isLoading.value = true
+                currentPage = 1
+                isLastPage = false
+                _videoList.value = emptyList() // 清空列表进行刷新
+            } else {
+                _isLoadingMore.value = true
+            }
+            _errorMessage.value = null
+
+            // 构建目标 URL
+            // 如果第一页就是 baseCategoryUrl (不带页码)
+            // 如果页码大于1，则附加页码
+            val targetUrl = "${baseCategoryUrl}${currentPage}/" // 例如 https://www.xvideos.com/new/2/ (注意末尾的斜杠，根据实际URL格式调整)
+            // 如果第一页的URL也是 https://www.xvideos.com/new/1/，则可以直接用下面的
+            // val targetUrl = "${baseCategoryUrl}${currentPage}/"
+
+            Log.d("ViewModel", "Fetching page: $currentPage, isRefresh: $isRefresh")
+
+            try {
+                // val newVideos = parser.fetchAndParseVideos(baseUrl, currentPage) // 如果 baseUrl 不含查询参数
+                val newVideos = fetchAndParseVideos(targetUrl) // 如果 baseCategoryUrl 包含所有固定参数
+
+                if (newVideos.isEmpty() && currentPage > 1) {
+                    isLastPage = true
+                    Log.i("ViewModel", "Reached last page or no more new videos on page $currentPage.")
+                } else if (newVideos.isNotEmpty()) {
+                    _videoList.update { currentList ->
+                        if (isRefresh) newVideos else currentList + newVideos
+                    }
+                    if (!isRefresh) { // 只有在加载更多成功时才增加页码
+                        currentPage++
+                    }
+                } else if (isRefresh && newVideos.isEmpty()) {
+                    // 刷新时第一页就没有数据
+                    Log.w("ViewModel", "No videos found on initial refresh (page 1).")
+                }
+                if (isRefresh) currentPage++ // 刷新成功后，下一页是第二页
 
             } catch (e: Exception) {
-                // 处理错误
-                _errorMessage.value = "Failed to load videos: ${e.message}"
-                e.printStackTrace()
+                Log.e("ViewModel", "Error fetching videos for page $currentPage: ${e.localizedMessage}", e)
+                _errorMessage.value = "加载失败: ${e.localizedMessage}"
+                if (!isRefresh && currentPage > 1) { // 如果加载更多失败，可以考虑是否回滚页码或标记错误
+                    // isLastPage = true; // 或者标记为无法加载更多
+                }
             } finally {
-                _isLoading.value = false
+                if (isRefresh) {
+                    _isLoading.value = false
+                } else {
+                    _isLoadingMore.value = false
+                }
             }
         }
     }
 
-    // 如果您有刷新数据的需求
+    // 提供给UI调用的加载更多函数
+    fun loadMoreVideos() {
+        if (!isLastPage && !isLoading.value && !isLoadingMore.value) {
+            Log.d("ViewModel", "loadMoreVideos called, current page before fetch: ${currentPage-1}")
+            fetchVideoData(isRefresh = false)
+        } else {
+            Log.d("ViewModel", "loadMoreVideos skipped: isLastPage=$isLastPage, isLoading=${isLoading.value}, isLoadingMore=${isLoadingMore.value}")
+        }
+    }
+
+    // 提供给UI调用的刷新函数
     fun refreshVideos() {
-        fetchVideoData()
+        Log.d("ViewModel", "refreshVideos called")
+        fetchVideoData(isRefresh = true)
     }
 }

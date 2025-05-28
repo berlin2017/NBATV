@@ -49,7 +49,7 @@ fun AppNavigation(navController: NavHostController) {
                 videoUrlArg?.let { URLDecoder.decode(it, StandardCharsets.UTF_8.toString()) }
 
             if (decodedUrl != null) {
-                PlayerScreen(videoUrl = decodedUrl)
+                PlayerScreen(videoPageUrl = decodedUrl)
             } else {
                 // 如果 URL 无效或未找到，可以导航回列表或显示错误
                 // 这里简单地返回上一页

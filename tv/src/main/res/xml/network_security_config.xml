@@ -2,6 +2,17 @@
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">commondatastorage.googleapis.com</domain>
+        <domain includeSubdomains="true">198.16.64.10</domain>
+        <domain includeSubdomains="true">cn.pornhub.com</domain>
+
+        <trust-anchors>
+            <!-- 信任系统预装的 CA -->
+            <certificates src="system" overridePins="true"/>
+            <!-- (可选) 信任用户添加的 CA -->
+            <certificates src="user" overridePins="true"/>
+            <!-- (可选) 信任一个特定的调试 CA -->
+            <certificates src="@raw/my_ca" />
+        </trust-anchors>
         <!-- Add other domains here if needed -->
     </domain-config>
 </network-security-config>
