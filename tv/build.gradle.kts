@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -90,4 +91,12 @@ dependencies {
     // Kotlin Coroutines (推荐与 OkHttp 配合进行异步操作)
     //noinspection NewerVersionAvailable
     implementation(libs.kotlinx.coroutines.android)
+
+    // Room
+    implementation(libs.androidx.room.runtime)
+    annotationProcessor(libs.androidx.room.compiler)
+    // To use Kotlin Symbol Processing (KSP) for faster annotation processing
+    ksp(libs.androidx.room.compiler) // 推荐使用 KSP
+    // Kotlin Extensions and Coroutines support for Room
+    implementation(libs.androidx.room.ktx)
 }
